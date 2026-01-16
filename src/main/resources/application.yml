@@ -7,10 +7,31 @@ spring:
     password: 123456
   application:
     name: ai-code-backend
+  profiles:
+    active: local
 server:
   port: 8123
   servlet:
     context-path: /api
+
+# API配置模板 - 实际密钥在 application-local.yml 中配置
+langchain4j:
+  anthropic:
+    chat-model:
+      api-key: ${ANTHROPIC_API_KEY:your-api-key-here}
+      model-name: claude-haiku-4-5-20251001
+      base-url: ${ANTHROPIC_BASE_URL:https://api.anthropic.com/v1}
+      log-requests: true
+      log-responses: true
+      max-tokens: 8192
+    streaming-chat-model:
+      api-key: ${ANTHROPIC_API_KEY:your-api-key-here}
+      model-name: claude-haiku-4-5-20251001
+      base-url: ${ANTHROPIC_BASE_URL:https://api.anthropic.com/v1}
+      log-requests: true
+      log-responses: true
+      max-tokens: 8192
+
 # springdoc-openapi
 springdoc:
   group-configs:
