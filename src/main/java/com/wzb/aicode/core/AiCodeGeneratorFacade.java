@@ -33,7 +33,7 @@ public class AiCodeGeneratorFacade {
     @Resource(name = "aiCodeGeneratorService")
     private AiCodeGeneratorService aiCodeGeneratorService;
 
-    @Resource(name="aiCodeGeneratorServiceStreaming")
+    @Resource(name="aiCodeGeneratorService")
     private AiCodeGeneratorService aiCodeGeneratorServiceStreaming;
     /**
      * 统一入口：根据类型生成并保存代码(使用appId)

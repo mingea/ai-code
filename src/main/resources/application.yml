@@ -5,6 +5,19 @@ spring:
     url: jdbc:mysql://localhost:3306/ai_code
     username: root
     password: 123456
+  # redis
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      database: 2
+      password:
+      ttl: 3600 # 缓存过期时间（秒）
+  # session 配置
+  session:
+    # session 30 天过期
+    timeout: 2592000
+
   application:
     name: ai-code-backend
   profiles:
@@ -13,7 +26,10 @@ server:
   port: 8123
   servlet:
     context-path: /api
-
+    # cookie 30 天过期
+    session:
+      cookie:
+        max-age: 2592000
 # API配置模板 - 实际密钥在 application-local.yml 中配置
 langchain4j:
   anthropic:
