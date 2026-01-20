@@ -6,7 +6,11 @@ import com.wzb.aicode.ai.AiCodeGeneratorService;
 import com.wzb.aicode.ai.AiCodeGeneratorServiceFactory;
 import com.wzb.aicode.ai.model.HtmlCodeResult;
 import com.wzb.aicode.ai.model.MultiFileCodeResult;
+import com.wzb.aicode.ai.model.message.AiResponseMessage;
+import com.wzb.aicode.ai.model.message.ToolExecutedMessage;
+import com.wzb.aicode.ai.model.message.ToolRequestMessage;
 import com.wzb.aicode.constant.AppConstant;
+import com.wzb.aicode.core.builder.VueProjectBuilder;
 import com.wzb.aicode.core.parser.CodeParserExecutor;
 import com.wzb.aicode.core.saver.CodeFileSaverExecutor;
 import com.wzb.aicode.exception.BusinessException;
@@ -30,11 +34,14 @@ import java.io.File;
 @Slf4j
 public class AiCodeGeneratorFacade {
 
-    @Resource(name = "aiCodeGeneratorService")
+    @Resource
     private AiCodeGeneratorService aiCodeGeneratorService;
 
-    @Resource(name="aiCodeGeneratorService")
-    private AiCodeGeneratorService aiCodeGeneratorServiceStreaming;
+    @Resource
+    private AiCodeGeneratorServiceFactory aiCodeGeneratorServiceFactory;
+
+    @Resource
+    private VueProjectBuilder vueProjectBuilder;
     /**
      * 统一入口：根据类型生成并保存代码(使用appId)
      *
@@ -70,17 +77,19 @@ public class AiCodeGeneratorFacade {
      * @param appId           应用ID
      */
     public Flux<String> generateAndSaveCodeStream(String userMessage, CodeGenTypeEnum codeGenTypeEnum, Long appId) {
-        if (codeGenTypeEnum == null) {
-            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "生成类型为空");
-        }
+        AiCodeGeneratorService aiCodeGeneratorService = aiCodeGeneratorServiceFactory.getAiCodeGeneratorService(appId, codeGenTypeEnum);
         return switch (codeGenTypeEnum) {
             case HTML -> {
-                Flux<String> codeStream = aiCodeGeneratorServiceStreaming.generateHtmlCodeStream(userMessage);
+                Flux<String> codeStream = aiCodeGeneratorService.generateHtmlCodeStream(userMessage);
                 yield processCodeStream(codeStream, CodeGenTypeEnum.HTML, appId);
             }
             case MULTI_FILE -> {
-                Flux<String> codeStream = aiCodeGeneratorServiceStreaming.generateMultiFileCodeStream(userMessage);
+                Flux<String> codeStream = aiCodeGeneratorService.generateMultiFileCodeStream(userMessage);
                 yield processCodeStream(codeStream, CodeGenTypeEnum.MULTI_FILE, appId);
+            }
+            case VUE_PROJECT -> {
+                TokenStream tokenStream = aiCodeGeneratorService.generateVueProjectCodeStream(appId, userMessage);
+                yield processTokenStream(tokenStream, appId);
             }
             default -> {
                 String errorMessage = "不支持的生成类型：" + codeGenTypeEnum.getValue();
@@ -89,6 +98,40 @@ public class AiCodeGeneratorFacade {
         };
     }
 
+    /**
+     * 将 TokenStream 转换为 Flux<String>，并传递工具调用信息
+     *
+     * @param tokenStream TokenStream 对象
+     * @param appId       应用 ID
+     * @return Flux<String> 流式响应
+     */
+    private Flux<String> processTokenStream(TokenStream tokenStream, Long appId) {
+        return Flux.create(sink -> {
+            tokenStream.onPartialResponse((String partialResponse) -> {
+                        AiResponseMessage aiResponseMessage = new AiResponseMessage(partialResponse);
+                        sink.next(JSONUtil.toJsonStr(aiResponseMessage));
+                    })
+                    .onPartialToolExecutionRequest((index, toolExecutionRequest) -> {
+                        ToolRequestMessage toolRequestMessage = new ToolRequestMessage(toolExecutionRequest);
+                        sink.next(JSONUtil.toJsonStr(toolRequestMessage));
+                    })
+                    .onToolExecuted((ToolExecution toolExecution) -> {
+                        ToolExecutedMessage toolExecutedMessage = new ToolExecutedMessage(toolExecution);
+                        sink.next(JSONUtil.toJsonStr(toolExecutedMessage));
+                    })
+                    .onCompleteResponse((ChatResponse response) -> {
+                        // 执行 Vue 项目构建（同步执行，确保预览时项目已就绪）
+                        String projectPath = AppConstant.CODE_OUTPUT_ROOT_DIR + "/vue_project_" + appId;
+                        vueProjectBuilder.buildProject(projectPath);
+                        sink.complete();
+                    })
+                    .onError((Throwable error) -> {
+                        error.printStackTrace();
+                        sink.error(error);
+                    })
+                    .start();
+        });
+    }
 
     /**
      * 生成 HTML 模式的代码并保存（流式）
@@ -97,7 +140,7 @@ public class AiCodeGeneratorFacade {
      * @return 保存的目录
      */
     private Flux<String> generateAndSaveHtmlCodeStream(String userMessage) {
-        Flux<String> result = aiCodeGeneratorServiceStreaming.generateHtmlCodeStream(userMessage);
+        Flux<String> result = aiCodeGeneratorService.generateHtmlCodeStream(userMessage);
         // 当流式返回生成代码完成后，再保存代码
         StringBuilder codeBuilder = new StringBuilder();
         return result
@@ -126,7 +169,7 @@ public class AiCodeGeneratorFacade {
      * @return 保存的目录
      */
     private Flux<String> generateAndSaveMultiFileCodeStream(String userMessage) {
-        Flux<String> result = aiCodeGeneratorServiceStreaming.generateMultiFileCodeStream(userMessage);
+        Flux<String> result = aiCodeGeneratorService.generateMultiFileCodeStream(userMessage);
         // 当流式返回生成代码完成后，再保存代码
         StringBuilder codeBuilder = new StringBuilder();
         return result
