@@ -1,19 +1,19 @@
 package com.wzb.aicode.core.handler;
 
-import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 
 import com.wzb.aicode.ai.model.message.*;
-import com.wzb.aicode.model.entity.User;
+import com.wzb.aicode.ai.tools.BaseTool;
+import com.wzb.aicode.ai.tools.ToolManager;
 import com.wzb.aicode.model.enums.ChatHistoryMessageTypeEnum;
 import com.wzb.aicode.service.ChatHistoryService;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
-
+import com.wzb.aicode.model.entity.User;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -24,6 +24,9 @@ import java.util.Set;
 @Slf4j
 @Component
 public class JsonMessageStreamHandler {
+
+    @Resource
+    private ToolManager toolManager;
 
     /**
      * 处理 TokenStream（VUE_PROJECT）
@@ -64,14 +67,6 @@ public class JsonMessageStreamHandler {
      * 解析并收集 TokenStream 数据
      */
     private String handleJsonMessageChunk(String chunk, StringBuilder chatHistoryStringBuilder, Set<String> seenToolIds) {
-        // 检查是否为有效的 JSON 格式
-        if (chunk == null || !chunk.trim().startsWith("{")) {
-            // 不是 JSON 格式，当作普通 AI 响应文本处理
-            if (chunk != null && !chunk.isEmpty()) {
-                chatHistoryStringBuilder.append(chunk);
-            }
-            return chunk;
-        }
         // 解析 JSON
         StreamMessage streamMessage = JSONUtil.toBean(chunk, StreamMessage.class);
         StreamMessageTypeEnum typeEnum = StreamMessageTypeEnum.getEnumByValue(streamMessage.getType());
@@ -86,11 +81,15 @@ public class JsonMessageStreamHandler {
             case TOOL_REQUEST -> {
                 ToolRequestMessage toolRequestMessage = JSONUtil.toBean(chunk, ToolRequestMessage.class);
                 String toolId = toolRequestMessage.getId();
+                String toolName = toolRequestMessage.getName();
                 // 检查是否是第一次看到这个工具 ID
                 if (toolId != null && !seenToolIds.contains(toolId)) {
                     // 第一次调用这个工具，记录 ID 并完整返回工具信息
                     seenToolIds.add(toolId);
-                    return "\n\n[选择工具] 写入文件\n\n";
+                    // 根据工具名称获取工具实例
+                    BaseTool tool = toolManager.getTool(toolName);
+                    // 返回格式化的工具调用信息
+                    return tool.generateToolRequestResponse();
                 } else {
                     // 不是第一次调用这个工具，直接返回空
                     return "";
@@ -99,15 +98,10 @@ public class JsonMessageStreamHandler {
             case TOOL_EXECUTED -> {
                 ToolExecutedMessage toolExecutedMessage = JSONUtil.toBean(chunk, ToolExecutedMessage.class);
                 JSONObject jsonObject = JSONUtil.parseObj(toolExecutedMessage.getArguments());
-                String relativeFilePath = jsonObject.getStr("relativeFilePath");
-                String suffix = FileUtil.getSuffix(relativeFilePath);
-                String content = jsonObject.getStr("content");
-                String result = String.format("""
-                        [工具调用] 写入文件 %s
-                        ```%s
-                        %s
-                        ```
-                        """, relativeFilePath, suffix, content);
+                // 根据工具名称获取工具实例
+                String toolName = toolExecutedMessage.getName();
+                BaseTool tool = toolManager.getTool(toolName);
+                String result = tool.generateToolExecutedResult(jsonObject);
                 // 输出前端和要持久化的内容
                 String output = String.format("\n\n%s\n\n", result);
                 chatHistoryStringBuilder.append(output);
@@ -119,4 +113,4 @@ public class JsonMessageStreamHandler {
             }
         }
     }
-}
+} 

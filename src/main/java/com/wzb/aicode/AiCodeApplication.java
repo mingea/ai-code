@@ -4,10 +4,10 @@ import dev.langchain4j.community.store.embedding.redis.spring.RedisEmbeddingStor
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.context.annotation.EnableAspectJAutoProxy;
+import org.springframework.cache.annotation.EnableCaching;
 
 @SpringBootApplication(exclude = {RedisEmbeddingStoreAutoConfiguration.class})
-@EnableAspectJAutoProxy(exposeProxy = true)
+@EnableCaching
 @MapperScan("com.wzb.aicode.mapper")
 public class AiCodeApplication {
 

@@ -5,9 +5,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.io.File;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -17,25 +14,20 @@ import java.util.concurrent.TimeUnit;
 @Component
 public class VueProjectBuilder {
 
-    // 使用固定大小的线程池来处理构建任务
-    private final ExecutorService executorService = Executors.newFixedThreadPool(
-            Runtime.getRuntime().availableProcessors(),
-            r -> new Thread(r, "vue-builder-" + System.currentTimeMillis())
-    );
-
     /**
      * 异步构建 Vue 项目
      *
      * @param projectPath
      */
     public void buildProjectAsync(String projectPath) {
-        CompletableFuture.runAsync(() -> {
-            try {
-                buildProject(projectPath);
-            } catch (Exception e) {
-                log.error("异步构建 Vue 项目时发生异常: {}", e.getMessage(), e);
-            }
-        }, executorService);
+        Thread.ofVirtual().name("vue-builder-" + System.currentTimeMillis())
+                .start(() -> {
+                    try {
+                        buildProject(projectPath);
+                    } catch (Exception e) {
+                        log.error("异步构建 Vue 项目时发生异常: {}", e.getMessage(), e);
+                    }
+                });
     }
 
     /**
@@ -146,13 +138,6 @@ public class VueProjectBuilder {
                 return true;
             } else {
                 log.error("命令执行失败，退出码: {}", exitCode);
-                // 尝试读取错误输出以获取更多详细信息
-                try {
-                    String errorOutput = new java.util.Scanner(process.getErrorStream()).useDelimiter("\\A").next();
-                    log.error("错误输出: {}", errorOutput);
-                } catch (Exception e) {
-                    log.error("无法读取错误输出: {}", e.getMessage());
-                }
                 return false;
             }
         } catch (Exception e) {
@@ -161,18 +146,4 @@ public class VueProjectBuilder {
         }
     }
 
-    /**
-     * 关闭线程池资源
-     */
-    public void shutdown() {
-        executorService.shutdown();
-        try {
-            if (!executorService.awaitTermination(60, TimeUnit.SECONDS)) {
-                executorService.shutdownNow();
-            }
-        } catch (InterruptedException e) {
-            executorService.shutdownNow();
-            Thread.currentThread().interrupt();
-        }
-    }
 }

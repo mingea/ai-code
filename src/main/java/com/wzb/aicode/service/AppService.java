@@ -2,6 +2,7 @@ package com.wzb.aicode.service;
 
 import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.core.service.IService;
+import com.wzb.aicode.model.dto.app.AppAddRequest;
 import com.wzb.aicode.model.dto.app.AppQueryRequest;
 import com.wzb.aicode.model.entity.App;
 import com.wzb.aicode.model.entity.User;
@@ -27,6 +28,8 @@ public interface AppService extends IService<App> {
      * @return
      */
     Flux<String> chatToGenCode(Long appId, String message, User loginUser);
+
+    Long createApp(AppAddRequest appAddRequest, User loginUser);
 
     String deployApp(Long appId, User loginUser);
 

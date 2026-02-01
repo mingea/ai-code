@@ -23,12 +23,13 @@ public class RedisChatMemoryStoreConfig {
 
     private long ttl;
 
+    private String database;
+
     @Bean
     public RedisChatMemoryStore redisChatMemoryStore() {
         RedisChatMemoryStore.Builder builder = RedisChatMemoryStore.builder()
                 .host(host)
                 .port(port)
-                .password(password)
                 .ttl(ttl);
 
         return builder.build();
